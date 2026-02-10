@@ -7,16 +7,21 @@ from datetime import datetime
 import urllib.parse
 
 # ───────────────────────────────
-# 1. 接続先の自動判別
+# 1. 接続先の自動判別 & 変数定義
 # ───────────────────────────────
 USE_EXTERNAL_DB = "postgres" in st.secrets
+
+if USE_EXTERNAL_DB:
+    import psycopg2
+    conn_info = "🌐 外部DB(Supabase)に接続中"
+else:
+    conn_info = "🏠 ローカルDB(SQLite)に接続中"
 
 # ───────────────────────────────
 # 2. 共通DB操作関数（高速化対応版）
 # ───────────────────────────────
 def get_db_connection():
     if USE_EXTERNAL_DB:
-        import psycopg2
         return psycopg2.connect(
             host=st.secrets["postgres"]["host"],
             database=st.secrets["postgres"]["database"],
@@ -29,8 +34,8 @@ def get_db_connection():
         conn.row_factory = sqlite3.Row
         return conn
 
-# 🚀 読み込みを速くするためのキャッシュ
-@st.cache_data(ttl=600)  # 10分間データを保持
+# 🚀 読み込みを速くするためのキャッシュ（10分間保持）
+@st.cache_data(ttl=600)
 def run_query_cached(query, params=None):
     return run_query(query, params)
 
@@ -46,7 +51,7 @@ def run_query(query, params=None, commit=False):
         cur.execute(query, params or ())
         if commit:
             conn.commit()
-            st.cache_data.clear() # データ更新時はキャッシュを空にする
+            st.cache_data.clear() # 更新があったらキャッシュを飛ばす
             return None
         res = cur.fetchall()
         return [dict(row) for row in res]
@@ -71,12 +76,11 @@ run_query(f'CREATE TABLE IF NOT EXISTS events (id {id_type}, date TEXT, title TE
 run_query(f'CREATE TABLE IF NOT EXISTS reservations (id {id_type}, event_id INTEGER, name TEXT, people INTEGER, email TEXT, status TEXT DEFAULT \'active\')', commit=True)
 
 # ───────────────────────────────
-# 4. UI・スタイル設定（維持）
+# 4. UI・スタイル設定
 # ───────────────────────────────
 st.set_page_config(page_title="One Once Over", layout="wide")
 
 def get_info(key, default=""):
-    # 設定情報もキャッシュ経由で高速取得
     res = run_query_cached("SELECT value FROM site_info WHERE key=?", (key,))
     return res[0]['value'] if res else default
 
@@ -114,7 +118,7 @@ for k in ['is_logged_in', 'page', 'selected_date', 'view_month', 'view_year']:
         st.session_state[k] = datetime.now().month if k == 'view_month' else datetime.now().year if k == 'view_year' else "top" if k == 'page' else False
 
 with st.sidebar:
-    st.info(conn_info)
+    st.info(conn_info) # ✅ エラー修正済み
     if st.button("🏠 TOPへ戻る"): st.session_state.page = "top"; st.query_params.clear(); st.rerun()
     if st.button("📅 予定一覧"): st.session_state.page = "list"; st.rerun()
     if st.session_state.is_logged_in:
@@ -146,7 +150,7 @@ if st.session_state.page == "top":
 
     cal = pycal.Calendar(0)
     month_days = cal.monthdayscalendar(st.session_state.view_year, st.session_state.view_month)
-    rows = run_query_cached("SELECT date, title, image_data FROM events") # 高速
+    rows = run_query_cached("SELECT date, title, image_data FROM events")
     live_map = { r['date']: r for r in rows }
     
     html = '<table class="cal-table"><tr>' + "".join([f'<th class="cal-header">{d}</th>' for d in ["月","火","水","木","金","土","日"]]) + '</tr>'
@@ -180,7 +184,7 @@ elif st.session_state.page == "detail":
         col1, col2 = st.columns(2)
         with col1:
             maps_url = f"https://www.google.com/maps/search/?api=1&query={urllib.parse.quote(e['location'])}"
-            st.markdown(f"""<div class="info-box">📍 <b>場所:</b> {e['location']}<br><a href="{maps_url}" target="_blank" style="color:#ff6600;">🗺 Google MAP</a><br>💰 <b>料金:</b> {e['price']}</div>""", unsafe_allow_html=True)
+            st.markdown(f"""<div class="info-box">📍 <b>場所:</b> {e['location']}<br><a href="{maps_url}" target="_blank" style="color:#ff6600; text-decoration:none; font-weight:bold;">🗺 Google MAPを表示</a><br>💰 <b>料金:</b> {e['price']}</div>""", unsafe_allow_html=True)
         with col2:
             st.markdown(f"""<div class="success-box">⏰ <b>Open:</b> {e['open_time']}<br>🎸 <b>Start:</b> {e['start_time']}<br>🔥 <b>出演:</b> {e['performance_time']}</div>""", unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
@@ -192,60 +196,62 @@ elif st.session_state.page == "detail":
                 u_num = st.number_input("人数", 1, 10, 1)
                 if st.form_submit_button("予約を確定する"):
                     run_query("INSERT INTO reservations (event_id, name, people, email) VALUES (?,?,?,?)", (e['id'], u_name, u_num, u_email), commit=True)
-                    st.balloons(); st.success("予約完了！")
+                    st.balloons(); st.success("予約完了だぜ！")
 
-        # 🚀 【追加】オーナー専用：予約者リスト
+        # 🚀 オーナー専用：このイベントの予約者リスト
         if st.session_state.is_logged_in:
             st.divider()
-            st.subheader("🛠【管理者限定】このイベントの予約名簿")
+            st.subheader("🛠【管理者限定】予約者リスト")
             reserves = run_query("SELECT * FROM reservations WHERE event_id=?", (e['id'],))
             if not reserves:
-                st.info("まだ予約はないぜ。")
+                st.info("予約者はまだいないぜ。")
             else:
                 for r in reserves:
-                    col_info, col_btn = st.columns([4, 1])
-                    col_info.write(f"👤 {r['name']} 様 | {r['people']}名 | {r['email']}")
-                    if col_btn.button("キャンセル", key=f"can_{r['id']}"):
+                    c1, c2 = st.columns([4, 1])
+                    c1.write(f"👤 {r['name']} 様 ({r['people']}名) | {r['email']}")
+                    if c2.button("キャンセル", key=f"del_{r['id']}"):
                         run_query("DELETE FROM reservations WHERE id=?", (r['id'],), commit=True)
                         st.rerun()
 
 elif st.session_state.page == "admin_events":
-    # 既存の管理ページ（省略せず保持）
     st.markdown("### 🛠 ライブ予定管理")
-    with st.expander("🆕 新規イベントを登録する"):
+    with st.expander("🆕 新規登録"):
         with st.form("new_event"):
             d = st.date_input("日付").strftime('%Y-%m-%d'); t = st.text_input("タイトル")
-            ot = st.text_input("開場時間"); st_t = st.text_input("開演時間"); pf_t = st.text_input("出演時間")
+            ot = st.text_input("開場"); st_t = st.text_input("開演"); pf_t = st.text_input("出演時間")
             loc = st.text_input("場所"); pr = st.text_input("料金")
-            img_file = st.file_uploader("ライブ画像", type=['png', 'jpg'])
+            img_file = st.file_uploader("画像", type=['png', 'jpg'])
             if st.form_submit_button("登録"):
                 run_query("INSERT INTO events (date, title, open_time, start_time, performance_time, location, price, image_data) VALUES (?,?,?,?,?,?,?,?)", (d,t,ot,st_t,pf_t,loc,pr,img_to_base64(img_file)), commit=True)
                 st.rerun()
+    
     evs = run_query("SELECT * FROM events ORDER BY date DESC")
     for ev in evs:
         with st.expander(f"📝 {ev['date']} | {ev['title']}"):
             with st.form(f"edit_{ev['id']}"):
-                u_title = st.text_input("タイトル", value=ev['title'])
+                u_t = st.text_input("タイトル", value=ev['title'])
                 if st.form_submit_button("更新"):
-                    run_query("UPDATE events SET title=? WHERE id=?", (u_title, ev['id']), commit=True); st.rerun()
+                    run_query("UPDATE events SET title=? WHERE id=?", (u_t, ev['id']), commit=True); st.rerun()
                 if st.form_submit_button("🚨 削除"):
                     run_query("DELETE FROM events WHERE id=?", (ev['id'],), commit=True); st.rerun()
 
-# --- 他の管理ページも元のコードの状態を維持 ---
 elif st.session_state.page == "admin_customers":
-    st.markdown("### 👥 顧客名簿")
+    st.markdown("### 👥 顧客管理")
     summary = run_query("SELECT e.date, e.title, SUM(r.people) as total FROM events e LEFT JOIN reservations r ON e.id = r.event_id GROUP BY e.id ORDER BY e.date DESC")
     st.table(summary)
     all_res = run_query("SELECT r.name, r.email, r.people, e.date, e.title FROM reservations r JOIN events e ON r.event_id = e.id ORDER BY e.date DESC")
     st.dataframe(all_res, use_container_width=True)
 
 elif st.session_state.page == "admin_style":
-    st.subheader("🎨 サイト外観設定")
-    with st.form("style_form"):
-        bg_f = st.file_uploader("背景画像")
+    st.subheader("🎨 外観設定")
+    with st.form("style"):
+        bg = st.file_uploader("背景画像")
+        tp = st.file_uploader("TOP画像")
         if st.form_submit_button("保存"):
-            if bg_f: run_query("INSERT INTO site_info (key, value) VALUES ('bg_image', ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", (img_to_base64(bg_f),), commit=True)
+            if bg: run_query("INSERT INTO site_info (key, value) VALUES ('bg_image', ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", (img_to_base64(bg),), commit=True)
+            if tp: run_query("INSERT INTO site_info (key, value) VALUES ('top_image', ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", (img_to_base64(tp),), commit=True)
             st.rerun()
+    if st.button("背景リセット"): run_query("DELETE FROM site_info WHERE key='bg_image'", commit=True); st.rerun()
 
 elif st.session_state.page == "list":
     st.markdown('### SCHEDULE LIST')
