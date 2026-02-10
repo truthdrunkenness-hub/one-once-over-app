@@ -314,10 +314,63 @@ with st.sidebar:
 # ───────────────────────────────
 if st.session_state.page == "top":
     st.markdown("""
-        <div style="text-align: center; padding: 10px 0;">
-            <h1 class="main-title">One Once Over</h1>
-            <p class="sub-title">- ライブ予約サイト -</p>
-        </div>
+    <style>
+    /* 1. Google Fonts 読み込み */
+    @import url('https://fonts.googleapis.com/css2?family=Anton&family=Noto+Sans+JP:wght@900&display=swap');
+
+    /* 2. 基本のタイトル設定 */
+    .main-title {
+        font-family: 'Anton', sans-serif;
+        font-size: 80px;
+        color: #ff6600;
+        text-shadow: 3px 3px 0px #fff;
+        text-align: center;
+        margin-bottom: 0;
+        line-height: 1.1;
+    }
+    .sub-title {
+        font-family: 'Noto Sans JP', sans-serif;
+        font-size: 24px;
+        color: #00ff00;
+        font-weight: bold;
+        text-align: center;
+        margin-top: -10px;
+    }
+
+    /* 3. カレンダーの基本デザイン（これが消えてたはずだ！） */
+    .cal-table { width: 100%; border-collapse: collapse; background: #000; color: #fff; }
+    .cal-header { background: #333; color: #fff; padding: 10px; text-align: center; border: 1px solid #444; }
+    .cal-td { border: 1px solid #444; width: 14%; height: 100px; vertical-align: top; position: relative; padding: 5px; }
+    .cal-link { text-decoration: none; color: inherit; display: block; width: 100%; height: 100%; }
+    .day-num { font-weight: bold; font-size: 18px; color: #fff; }
+    .day-holiday { color: #ff4b4b !important; }
+    .day-sat { color: #4b4bff !important; }
+    .event-badge { background: #ff6600; color: #fff; font-size: 10px; padding: 3px; border-radius: 3px; margin-top: 5px; text-align: center; }
+    .cal-img { width: 100%; height: auto; border-radius: 5px; margin-top: 5px; }
+
+    /* 4. 【重要】スマホ専用の調整（画面幅 768px 以下） */
+    @media (max-width: 768px) {
+        .main-title {
+            font-size: 40px !important; /* スマホではタイトルを小さく */
+            text-shadow: 2px 2px 0px #fff;
+        }
+        .sub-title {
+            font-size: 14px !important;
+            margin-top: 0px;
+        }
+        .cal-td {
+            height: 60px; /* スマホでは高さを抑える */
+            padding: 2px;
+        }
+        .day-num {
+            font-size: 12px;
+        }
+        .event-badge {
+            font-size: 7px;
+            padding: 1px;
+        }
+    }
+    </style>
     """, unsafe_allow_html=True)
 
     # --- 【ここが追加：トップ画像表示】 ---
