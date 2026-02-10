@@ -1,10 +1,6 @@
 import streamlit as st
 import sqlite3
-import os
-import smtplib
 import base64
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
 import calendar as pycal
 from datetime import datetime
 import urllib.parse
@@ -14,19 +10,12 @@ import urllib.parse
 # ───────────────────────────────
 USE_EXTERNAL_DB = "postgres" in st.secrets
 
-if USE_EXTERNAL_DB:
-    import psycopg2
-    from psycopg2.extras import DictCursor
-    conn_info = "🌐 外部DB(Supabase)に接続中"
-else:
-    import sqlite3
-    conn_info = "🏠 ローカルDB(SQLite)に接続中"
-
 # ───────────────────────────────
-# 2. 共通DB操作関数
+# 2. 共通DB操作関数（キャッシュで高速化）
 # ───────────────────────────────
 def get_db_connection():
     if USE_EXTERNAL_DB:
+        import psycopg2
         return psycopg2.connect(
             host=st.secrets["postgres"]["host"],
             database=st.secrets["postgres"]["database"],
@@ -38,6 +27,11 @@ def get_db_connection():
         conn = sqlite3.connect('live_reservation.db', check_same_thread=False)
         conn.row_factory = sqlite3.Row
         return conn
+
+# 読み込みを高速化するためにキャッシュを使用（10分間保持）
+@st.cache_data(ttl=600)
+def run_query_cached(query, params=None):
+    return run_query(query, params)
 
 def run_query(query, params=None, commit=False):
     conn = get_db_connection()
@@ -51,12 +45,12 @@ def run_query(query, params=None, commit=False):
         cur.execute(query, params or ())
         if commit:
             conn.commit()
+            st.cache_data.clear() # 更新があったらキャッシュをクリア
             return None
         res = cur.fetchall()
         return [dict(row) for row in res]
     except Exception as e:
-        if "column" not in str(e).lower():
-            st.error(f"DBエラーだぜ: {e}")
+        st.error(f"DBエラーだぜ: {e}")
         return []
     finally:
         conn.close()
@@ -67,25 +61,20 @@ def img_to_base64(uploaded_file):
     return None
 
 # ───────────────────────────────
-# 3. テーブル初期化 & マイグレーション
+# 3. 初期化
 # ───────────────────────────────
 id_type = "SERIAL PRIMARY KEY" if USE_EXTERNAL_DB else "INTEGER PRIMARY KEY AUTOINCREMENT"
 run_query('CREATE TABLE IF NOT EXISTS site_info (key TEXT PRIMARY KEY, value TEXT)', commit=True)
-run_query(f'CREATE TABLE IF NOT EXISTS events (id {id_type}, date TEXT, title TEXT, description TEXT, open_time TEXT, start_time TEXT, performance_time TEXT, price TEXT, location TEXT, image_data TEXT)', commit=True)
+run_query(f'CREATE TABLE IF NOT EXISTS events (id {id_type}, date TEXT, title TEXT, open_time TEXT, start_time TEXT, performance_time TEXT, price TEXT, location TEXT, image_data TEXT)', commit=True)
 run_query(f'CREATE TABLE IF NOT EXISTS reservations (id {id_type}, event_id INTEGER, name TEXT, people INTEGER, email TEXT, status TEXT DEFAULT \'active\')', commit=True)
 
-# 念のためカラム追加
-for col in ["performance_time", "image_data"]:
-    try: run_query(f"ALTER TABLE events ADD COLUMN {col} TEXT", commit=True)
-    except: pass
-
 # ───────────────────────────────
-# 4. UI・スタイル設定
+# 4. スタイル設定（シンプル＆高視認性）
 # ───────────────────────────────
 st.set_page_config(page_title="One Once Over", layout="wide")
 
 def get_info(key, default=""):
-    res = run_query("SELECT value FROM site_info WHERE key=?", (key,))
+    res = run_query_cached("SELECT value FROM site_info WHERE key=?", (key,))
     return res[0]['value'] if res else default
 
 bg_img = get_info("bg_image", "")
@@ -93,212 +82,168 @@ top_img = get_info("top_image", "")
 
 st.markdown(f"""
     <style>
-    @import url('https://fonts.googleapis.com/css2?family=Anton&family=Noto+Sans+JP:wght@900&display=swap');
-    .stApp {{ background: {f'url(data:image/png;base64,{bg_img})' if bg_img else '#0e1117'}; background-size: cover; background-attachment: fixed; }}
-    .block-container {{ padding: 2rem 0.5rem !important; }}
-    .main-title-container {{ padding-top: 50px !important; margin-bottom: 10px !important; }}
-    .main-title {{ font-family: 'Anton', sans-serif !important; font-size: clamp(40px, 15vw, 90px) !important; color: #ff6600 !important; text-shadow: 3px 3px 0px #fff !important; text-align: center !important; line-height: 1.0; }}
-    .sub-title {{ font-family: 'Noto Sans JP', sans-serif !important; font-size: 16px !important; color: #00ff00 !important; text-align: center !important; margin-top: -10px; }}
+    @import url('https://fonts.googleapis.com/css2?family=Anton&family=Noto+Sans+JP:wght@700;900&display=swap');
     
-    /* カレンダー設定 */
-    .cal-table {{ width: 100% !important; border-collapse: collapse !important; table-layout: fixed !important; background: rgba(0,0,0,0.85) !important; }}
-    .cal-header {{ background: #333 !important; color: #fff !important; font-size: 11px !important; padding: 6px 0 !important; border: 1px solid #444 !important; }}
-    .cal-td {{ border: 1px solid #444 !important; height: clamp(90px, 20vh, 140px) !important; vertical-align: top !important; padding: 4px !important; position: relative; }}
-    .day-num {{ font-weight: bold !important; font-size: 16px !important; color: #fff !important; }}
-    .cal-img {{ width: 100%; height: 50px; object-fit: cover; border-radius: 4px; margin-top: 2px; border: 1px solid #555; }}
-    .event-badge {{ background: #ff6600 !important; color: #fff !important; font-size: 10px !important; padding: 2px !important; border-radius: 3px !important; margin-top: 2px !important; white-space: nowrap !important; overflow: hidden !important; text-overflow: ellipsis !important; display: block !important; width: 100% !important; text-align: center; }}
+    .stApp {{ 
+        background-color: #121212; 
+        {f'background-image: linear-gradient(rgba(18,18,18,0.8), rgba(18,18,18,0.8)), url(data:image/png;base64,{bg_img});' if bg_img else ''}
+        background-size: cover; background-attachment: fixed;
+    }}
     
-    /* 詳細ページ（オレンジ枠削除済） */
-    .detail-card {{ background: rgba(0, 0, 0, 0.8) !important; padding: 25px !important; border-radius: 15px !important; color: white !important; margin-bottom: 20px; }}
-    .info-box {{ background: rgba(50, 50, 50, 0.9) !important; border-left: 5px solid #ff6600 !important; padding: 15px !important; border-radius: 5px; color: white !important; }}
-    .success-box {{ background: rgba(20, 40, 20, 0.9) !important; border-left: 5px solid #00ff00 !important; padding: 15px !important; border-radius: 5px; color: white !important; }}
+    .main-title {{ font-family: 'Anton', sans-serif; font-size: clamp(40px, 12vw, 80px); color: #ff6600; text-shadow: 2px 2px 10px rgba(0,0,0,0.5); text-align: center; }}
+    .sub-title {{ font-family: 'Noto Sans JP', sans-serif; font-size: 14px; color: #00ff00; text-align: center; letter-spacing: 2px; }}
     
-    .nav-container {{ display: flex; justify-content: space-between; align-items: center; width: 100%; background: rgba(17,17,17,0.9); border: 2px solid #00ff00; border-radius: 10px; margin-bottom: 15px; height: 50px; }}
-    .nav-btn {{ flex: 1; text-align: center; color: #00ff00 !important; text-decoration: none !important; font-weight: bold; font-size: 14px; line-height: 50px; }}
-    .nav-center {{ flex: 1.5; text-align: center; color: #fff; font-family: 'Anton', sans-serif; font-size: 20px; }}
+    /* カード類をさらに見やすく */
+    .detail-card {{ background: rgba(25, 25, 25, 0.95); padding: 20px; border-radius: 12px; border: 1px solid #333; }}
+    .info-box {{ background: #1e1e1e; border-left: 4px solid #ff6600; padding: 12px; border-radius: 4px; color: #eee; }}
+    .success-box {{ background: #1e1e1e; border-left: 4px solid #00ff00; padding: 12px; border-radius: 4px; color: #eee; }}
+
+    .cal-table {{ width: 100%; border-collapse: collapse; background: rgba(0,0,0,0.7); }}
+    .cal-td {{ border: 1px solid #444; height: 100px; vertical-align: top; padding: 5px; }}
+    .event-badge {{ background: #ff6600; color: #fff; font-size: 10px; padding: 2px; border-radius: 3px; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; display: block; }}
     </style>
     """, unsafe_allow_html=True)
 
 # ───────────────────────────────
-# 5. セッション & サイドバー
+# 5. メインナビゲーション
 # ───────────────────────────────
 for k in ['is_logged_in', 'page', 'selected_date', 'view_month', 'view_year']:
     if k not in st.session_state:
         st.session_state[k] = datetime.now().month if k == 'view_month' else datetime.now().year if k == 'view_year' else "top" if k == 'page' else False
 
 with st.sidebar:
-    st.info(conn_info)
-    if st.button("🏠 TOPへ戻る"): st.session_state.page = "top"; st.query_params.clear(); st.rerun()
-    if st.button("📅 予定一覧"): st.session_state.page = "list"; st.rerun()
+    if st.button("🏠 TOP"): st.session_state.page = "top"; st.query_params.clear(); st.rerun()
+    if st.button("📅 LIST"): st.session_state.page = "list"; st.rerun()
     if st.session_state.is_logged_in:
-        st.warning("🛠 OWNER MODE")
-        if st.button("🎸 ライブ予定の管理"): st.session_state.page = "admin_events"; st.rerun()
-        if st.button("👥 顧客名簿・予約集計"): st.session_state.page = "admin_customers"; st.rerun()
-        if st.button("🎨 サイト外観設定"): st.session_state.page = "admin_style"; st.rerun()
+        st.divider()
+        if st.button("🎸 ライブ管理"): st.session_state.page = "admin_events"; st.rerun()
+        if st.button("👥 顧客名簿"): st.session_state.page = "admin_customers"; st.rerun()
+        if st.button("🎨 デザイン"): st.session_state.page = "admin_style"; st.rerun()
         if st.button("Logout"): st.session_state.is_logged_in = False; st.rerun()
     else:
-        with st.expander("🛠 管理者"):
-            opw = st.text_input("Pass", type="password")
-            if st.button("Login"):
-                if opw == "owner123": st.session_state.is_logged_in = True; st.rerun()
+        with st.expander("Owner"):
+            if st.text_input("Pass", type="password") == "owner123":
+                st.session_state.is_logged_in = True; st.rerun()
 
 # ───────────────────────────────
-# 6. メインロジック
+# 6. 各ページ処理
 # ───────────────────────────────
 
-# --- TOPページ ---
 if st.session_state.page == "top":
-    st.markdown('<div class="main-title-container"><h1 class="main-title">One Once Over</h1></div>', unsafe_allow_html=True)
-    st.markdown('<p class="sub-title">- ライブ予約サイト -</p>', unsafe_allow_html=True)
-    if top_img: st.markdown(f'<div style="text-align:center;"><img src="data:image/png;base64,{top_img}" style="max-width:100%; border-radius:15px; margin-bottom:20px; border:2px solid #ff6600;"></div>', unsafe_allow_html=True)
+    st.markdown('<h1 class="main-title">One Once Over</h1>', unsafe_allow_html=True)
+    st.markdown('<p class="sub-title">LIVE RESERVATION SYSTEM</p>', unsafe_allow_html=True)
     
-    q_y, q_m = st.query_params.get("y"), st.query_params.get("m")
-    if q_y and q_m: st.session_state.view_year, st.session_state.view_month = int(q_y), int(q_m)
-    p_y, p_m = (st.session_state.view_year, st.session_state.view_month - 1) if st.session_state.view_month > 1 else (st.session_state.view_year - 1, 12)
-    n_y, n_m = (st.session_state.view_year, st.session_state.view_month + 1) if st.session_state.view_month < 12 else (st.session_state.view_year + 1, 1)
-    st.markdown(f'<div class="nav-container"><a href="./?y={p_y}&m={p_m}" target="_self" class="nav-btn">◀ PREV</a><div class="nav-center">{st.session_state.view_year} / {st.session_state.view_month:02d}</div><a href="./?y={n_y}&m={n_m}" target="_self" class="nav-btn">NEXT ▶</a></div>', unsafe_allow_html=True)
+    # 月移動ナビ
+    col_l, col_c, col_r = st.columns([1,2,1])
+    with col_c:
+        q_y, q_m = st.query_params.get("y"), st.query_params.get("m")
+        if q_y and q_m: st.session_state.view_year, st.session_state.view_month = int(q_y), int(q_m)
+        cur_y, cur_m = st.session_state.view_year, st.session_state.view_month
+        st.markdown(f"<h3 style='text-align:center;'>{cur_y} / {cur_m:02d}</h3>", unsafe_allow_html=True)
 
+    # カレンダー描画（ロジックは前回同様）
     cal = pycal.Calendar(0)
-    month_days = cal.monthdayscalendar(st.session_state.view_year, st.session_state.view_month)
-    rows = run_query("SELECT date, title, image_data FROM events")
+    month_days = cal.monthdayscalendar(cur_y, cur_m)
+    rows = run_query_cached("SELECT date, title, image_data FROM events")
     live_map = { r['date']: r for r in rows }
     
-    html = '<table class="cal-table"><tr>' + "".join([f'<th class="cal-header">{d}</th>' for d in ["月","火","水","木","金","土","日"]]) + '</tr>'
+    html = '<table class="cal-table"><tr>' + "".join([f'<th style="color:#888;">{d}</th>' for d in ["M","T","W","T","F","S","S"]]) + '</tr>'
     for week in month_days:
         html += '<tr>'
         for idx, day in enumerate(week):
-            if day == 0: html += '<td style="border:none; background:transparent;"></td>'
+            if day == 0: html += '<td></td>'
             else:
-                d_str = f"{st.session_state.view_year}-{st.session_state.view_month:02d}-{day:02d}"
-                cls = "day-holiday" if idx == 6 else "day-sat" if idx == 5 else ""
-                html += f'<td class="cal-td {cls}"><a href="./?date={d_str}" target="_self" style="text-decoration:none; color:inherit;"><span class="day-num">{day}</span>'
+                d_str = f"{cur_y}-{cur_m:02d}-{day:02d}"
+                html += f'<td class="cal-td"><a href="./?date={d_str}" target="_self" style="text-decoration:none; color:#fff;">{day}'
                 if d_str in live_map:
-                    ev = live_map[d_str]
-                    if ev['image_data']: html += f'<img src="data:image/png;base64,{ev["image_data"]}" class="cal-img">'
-                    html += f'<div class="event-badge">{ev["title"]}</div>'
+                    html += f'<div class="event-badge">{live_map[d_str]["title"]}</div>'
                 html += '</a></td>'
         html += '</tr>'
     st.markdown(html + '</table>', unsafe_allow_html=True)
+    
     if st.query_params.get("date"):
         st.session_state.selected_date = st.query_params.get("date")
         st.session_state.page = "detail"; st.rerun()
 
-# --- 詳細ページ ---
 elif st.session_state.page == "detail":
-    if st.button("← 戻る"): st.session_state.page = "top"; st.query_params.clear(); st.rerun()
-    ev = run_query("SELECT id, title, open_time, start_time, performance_time, price, location, image_data FROM events WHERE date=?", (st.session_state.selected_date,))
+    ev = run_query_cached("SELECT * FROM events WHERE date=?", (st.session_state.selected_date,))
     if ev:
         e = ev[0]
         st.markdown(f'<div class="detail-card">', unsafe_allow_html=True)
-        if e["image_data"]: st.image(f"data:image/png;base64,{e['image_data']}", use_container_width=True)
-        st.markdown(f'<h1 style="color:#ff6600; font-size:40px; margin-top:10px;">{e["title"]}</h1>', unsafe_allow_html=True)
+        st.header(f"🎸 {e['title']}")
+        st.markdown(f"<p style='color:#00ff00;'>📅 {st.session_state.selected_date}</p>", unsafe_allow_html=True)
         
-        col1, col2 = st.columns(2)
-        with col1:
-            maps_url = f"https://www.google.com/maps/search/?api=1&query={urllib.parse.quote(e['location'])}"
-            st.markdown(f"""
-                <div class="info-box">
-                    <p style="font-size:18px;">📍 <b>場所:</b> {e['location']}</p>
-                    <a href="{maps_url}" target="_blank" style="display:inline-block; background:#ff6600; color:white; padding:8px 15px; text-decoration:none; border-radius:5px; font-weight:bold; margin-bottom:10px;">🗺 Google MAPを表示</a>
-                    <p style="font-size:18px; margin-top:10px;">💰 <b>料金:</b> {e['price']}</p>
-                </div>
-            """, unsafe_allow_html=True)
-        with col2:
-            st.markdown(f"""
-                <div class="success-box">
-                    <p style="font-size:18px;">⏰ <b>Open:</b> {e['open_time']}</p>
-                    <p style="font-size:18px;">🎸 <b>Start:</b> {e['start_time']}</p>
-                    <p style="font-size:18px;">🔥 <b>出演:</b> {e['performance_time']}</p>
-                </div>
-            """, unsafe_allow_html=True)
+        c1, c2 = st.columns(2)
+        with c1: st.markdown(f'<div class="info-box">📍 {e["location"]}<br>💰 {e["price"]}</div>', unsafe_allow_html=True)
+        with c2: st.markdown(f'<div class="success-box">⏰ Open: {e["open_time"]}<br>🎸 Start: {e["start_time"]}</div>', unsafe_allow_html=True)
+        
+        st.divider()
+        with st.form("res_form"):
+            u_name = st.text_input("お名前（必須）")
+            u_email = st.text_input("メールアドレス")
+            u_num = st.number_input("人数", 1, 10, 1)
+            if st.form_submit_button("予約を確定する"):
+                if not u_name.strip():
+                    st.error("名前を入れてくれなきゃ困るぜ！")
+                else:
+                    # 重複チェック & 自動結合
+                    existing = run_query("SELECT id, people FROM reservations WHERE event_id=? AND email=?", (e['id'], u_email))
+                    if existing and u_email.strip() != "":
+                        new_total = existing[0]['people'] + u_num
+                        run_query("UPDATE reservations SET people=? WHERE id=?", (new_total, existing[0]['id']), commit=True)
+                        st.success(f"おっ、追加予約だな！合計 {new_total} 名で承ったぜ！")
+                    else:
+                        run_query("INSERT INTO reservations (event_id, name, people, email) VALUES (?,?,?,?)", (e['id'], u_name, u_num, u_email), commit=True)
+                        st.success("予約完了だ！会場で待ってるぜ。")
+                    st.balloons()
         st.markdown('</div>', unsafe_allow_html=True)
-        
-        with st.expander("🎫 予約フォームを開く", expanded=True):
-            with st.form("res_form"):
-                u_name = st.text_input("お名前")
-                u_email = st.text_input("メールアドレス")
-                u_num = st.number_input("人数", 1, 10, 1)
-                if st.form_submit_button("予約を確定する"):
-                    run_query("INSERT INTO reservations (event_id, name, people, email) VALUES (?,?,?,?)", (e['id'], u_name, u_num, u_email), commit=True)
-                    st.balloons(); st.success("予約完了だぜ！")
 
-# --- オーナー：イベント管理（予約者編集機能付き） ---
 elif st.session_state.page == "admin_events":
-    st.markdown("### 🛠 ライブ予定管理")
-    with st.expander("🆕 新規イベントを登録する"):
-        with st.form("new_event"):
-            d = st.date_input("日付").strftime('%Y-%m-%d'); t = st.text_input("タイトル")
-            ot = st.text_input("開場時間"); st_t = st.text_input("開演時間"); pf_t = st.text_input("出演時間")
-            loc = st.text_input("場所(Googleマップ用)"); pr = st.text_input("料金")
-            img_file = st.file_uploader("ライブ画像", type=['png', 'jpg'])
+    st.title("🛠 管理：ライブ予定")
+    with st.expander("🆕 新規登録"):
+        with st.form("new"):
+            d = st.date_input("日付").strftime('%Y-%m-%d')
+            t = st.text_input("タイトル")
+            loc = st.text_input("場所")
             if st.form_submit_button("登録"):
-                b64 = img_to_base64(img_file)
-                run_query("INSERT INTO events (date, title, open_time, start_time, performance_time, location, price, image_data) VALUES (?,?,?,?,?,?,?,?)", (d,t,ot,st_t,pf_t,loc,pr,b64), commit=True)
-                st.rerun()
+                run_query("INSERT INTO events (date, title, location) VALUES (?,?,?)", (d, t, loc), commit=True); st.rerun()
 
-    st.markdown("---")
     evs = run_query("SELECT * FROM events ORDER BY date DESC")
     for ev in evs:
         with st.expander(f"📝 {ev['date']} | {ev['title']}"):
-            tab1, tab2 = st.tabs(["イベント編集", "予約者リスト"])
-            with tab1:
-                with st.form(f"edit_form_{ev['id']}"):
-                    u_date = st.text_input("日付", value=ev['date'])
-                    u_title = st.text_input("タイトル", value=ev['title'])
-                    u_loc = st.text_input("場所", value=ev['location'])
-                    if st.form_submit_button("✅ 変更を保存"):
-                        run_query("UPDATE events SET date=?, title=?, location=? WHERE id=?", (u_date, u_title, u_loc, ev['id']), commit=True); st.rerun()
-                    if st.form_submit_button("🚨 削除"):
-                        run_query("DELETE FROM events WHERE id=?", (ev['id'],), commit=True); st.rerun()
-            with tab2:
-                reserves = run_query("SELECT * FROM reservations WHERE event_id=?", (ev['id'],))
-                if not reserves: st.write("予約者はまだいないぜ。")
-                for r in reserves:
-                    with st.form(f"edit_res_{r['id']}"):
-                        c1, c2, c3 = st.columns([3, 1, 2])
-                        r_name = c1.text_input("名前", value=r['name'])
-                        r_people = c2.number_input("人数", value=r['people'], min_value=1)
-                        if c3.form_submit_button("更新"):
-                            run_query("UPDATE reservations SET name=?, people=? WHERE id=?", (r_name, r_people, r['id']), commit=True); st.rerun()
-                        if c3.form_submit_button("予約削除"):
-                            run_query("DELETE FROM reservations WHERE id=?", (r['id'],), commit=True); st.rerun()
+            # 予約者の表示・編集・削除
+            reserves = run_query("SELECT * FROM reservations WHERE event_id=?", (ev['id'],))
+            for r in reserves:
+                col1, col2, col3 = st.columns([3,1,1])
+                col1.write(f"👤 {r['name']} ({r['email']})")
+                col2.write(f"{r['people']}名")
+                if col3.button("削除", key=f"del_{r['id']}"):
+                    run_query("DELETE FROM reservations WHERE id=?", (r['id'],), commit=True)
+                    st.rerun()
+            if st.button("イベント自体を削除", key=f"dev_{ev['id']}", type="primary"):
+                run_query("DELETE FROM events WHERE id=?", (ev['id'],), commit=True); st.rerun()
 
-# --- オーナー：顧客名簿ページ ---
 elif st.session_state.page == "admin_customers":
-    st.markdown("### 👥 顧客名簿・予約集計")
-    
-    # イベントごとの集計
-    st.subheader("📊 イベント別予約状況")
-    summary = run_query("""
-        SELECT e.date, e.title, SUM(r.people) as total_people, COUNT(r.id) as total_bookings
-        FROM events e LEFT JOIN reservations r ON e.id = r.event_id
-        GROUP BY e.id ORDER BY e.date DESC
-    """)
-    if summary: st.table(summary)
-
-    st.subheader("📜 全予約者リスト")
-    all_res = run_query("""
-        SELECT r.name, r.email, r.people, e.date, e.title 
+    st.title("👥 顧客名簿")
+    data = run_query("""
+        SELECT e.date, e.title, r.name, r.email, r.people 
         FROM reservations r JOIN events e ON r.event_id = e.id 
         ORDER BY e.date DESC
     """)
-    if all_res: st.dataframe(all_res, use_container_width=True)
-    else: st.write("まだデータがないぜ。")
+    st.dataframe(data, use_container_width=True)
 
 elif st.session_state.page == "admin_style":
-    st.subheader("🎨 サイト外観設定")
-    with st.form("style_form"):
-        bg_f = st.file_uploader("背景画像", type=['png', 'jpg'])
-        tp_f = st.file_uploader("TOPメイン画像", type=['png', 'jpg'])
+    st.title("🎨 デザイン設定")
+    with st.form("s"):
+        bg = st.file_uploader("背景画像")
         if st.form_submit_button("保存"):
-            if bg_f: run_query("INSERT INTO site_info (key, value) VALUES ('bg_image', ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", (img_to_base64(bg_f),), commit=True)
-            if tp_f: run_query("INSERT INTO site_info (key, value) VALUES ('top_image', ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", (img_to_base64(tp_f),), commit=True)
+            if bg: run_query("INSERT INTO site_info (key, value) VALUES ('bg_image', ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", (img_to_base64(bg),), commit=True)
             st.rerun()
-    if st.button("背景リセット"): run_query("DELETE FROM site_info WHERE key='bg_image'", commit=True); st.rerun()
+    if st.button("リセット"): run_query("DELETE FROM site_info WHERE key='bg_image'", commit=True); st.rerun()
 
 elif st.session_state.page == "list":
-    st.markdown('### SCHEDULE LIST')
-    res = run_query("SELECT date, title FROM events ORDER BY date ASC")
+    st.title("SCHEDULE")
+    res = run_query_cached("SELECT date, title FROM events ORDER BY date ASC")
     for r in res:
         if st.button(f"{r['date']} | {r['title']}", use_container_width=True):
             st.session_state.selected_date = r['date']; st.session_state.page = "detail"; st.rerun()
