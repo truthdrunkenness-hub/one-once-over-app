@@ -102,7 +102,7 @@ if 'selected_date' not in st.session_state: st.session_state.selected_date = Non
 if 'view_month' not in st.session_state: st.session_state.view_month = datetime.now().month
 if 'view_year' not in st.session_state: st.session_state.view_year = datetime.now().year
 
-# --- 🎨 共通CSS (デザイン調整版) ---
+# --- 🎨 共通CSS (モバイル横並び強制版) ---
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Anton&family=Noto+Sans+JP:wght@900&display=swap');
@@ -138,7 +138,7 @@ st.markdown("""
     
     .event-badge { background: #ff6600 !important; color: #fff !important; font-size: 10px !important; padding: 2px !important; border-radius: 3px !important; margin-top: 5px !important; text-align: center !important; }
 
-    /* ★ボタンのダサさ解消用CSS */
+    /* ボタン共通デザイン */
     div.stButton > button {
         background-color: #222 !important;
         color: #00ff00 !important;
@@ -147,31 +147,39 @@ st.markdown("""
         font-weight: bold !important;
         transition: 0.3s !important;
     }
-    div.stButton > button:hover {
-        background-color: #00ff00 !important;
-        color: #000 !important;
-    }
 
+    /* ★モバイルでの横並び強制（サンドイッチ）設定★ */
     @media (max-width: 768px) {
         .main-title { font-size: 40px !important; }
         .sub-title { font-size: 14px !important; }
         .cal-td { height: 65px !important; padding: 2px !important; }
         .day-num { font-size: 12px !important; }
         .event-badge { font-size: 7px !important; }
-        
-        /* スマホでボタンがデカすぎないように制限 */
-        div.stButton > button {
-            font-size: 11px !important;
-            padding: 4px 8px !important;
-            min-height: 30px !important;
-            max-width: 90px !important; /* 横幅を絞るぜ */
-            margin: 0 auto !important;
-            display: block !important;
+
+        /* Streamlitの標準カラムが縦になるのを防ぐ */
+        div[data-testid="stHorizontalBlock"] {
+            display: flex !important;
+            flex-direction: row !important;
+            flex-wrap: nowrap !important;
+            align-items: center !important;
+            justify-content: center !important;
+            gap: 5px !important; /* ボタン間の隙間を狭く */
         }
         
-        /* カラムの余白調整 */
-        div[data-testid="stHorizontalBlock"] {
-            align-items: center !important;
+        /* 各カラムの幅を強制調整 */
+        div[data-testid="column"] {
+            width: auto !important;
+            flex: 1 1 auto !important;
+            min-width: 0px !important;
+        }
+
+        /* スマホ用ボタンサイズ調整 */
+        div.stButton > button {
+            font-size: 10px !important;
+            padding: 2px 6px !important;
+            min-height: 32px !important;
+            max-width: 80px !important; /* ボタンがデカくならないよう制限 */
+            white-space: nowrap !important;
         }
     }
     </style>
@@ -282,8 +290,7 @@ if st.session_state.page == "top":
     
     st.divider()
 
-    # --- ★年月移動ボタンのレイアウト改善 ---
-    # カラム比率を [1, 2, 1] にして、ボタンが横に広がりすぎるのを防ぐ
+    # --- ★モバイル横並び強制カラム ---
     col_p, col_c, col_n = st.columns([1, 2, 1])
     with col_p:
         if st.button("◀ 前月", use_container_width=True):
@@ -291,7 +298,6 @@ if st.session_state.page == "top":
             if st.session_state.view_month == 0: st.session_state.view_month = 12; st.session_state.view_year -= 1
             st.rerun()
     with col_c:
-        # 年月の表示を少しスタイリッシュに
         st.markdown(f"<p style='text-align:center; color:#00ff00; font-size:18px; font-weight:bold; margin:0;'>{st.session_state.view_year} / {st.session_state.view_month:02d}</p>", unsafe_allow_html=True)
     with col_n:
         if st.button("次月 ▶", use_container_width=True):
