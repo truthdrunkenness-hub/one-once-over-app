@@ -102,164 +102,75 @@ if 'selected_date' not in st.session_state: st.session_state.selected_date = Non
 if 'view_month' not in st.session_state: st.session_state.view_month = datetime.now().month
 if 'view_year' not in st.session_state: st.session_state.view_year = datetime.now().year
 
-# --- 🎨 共通CSS (はみ出し徹底防止版) ---
+# クエリパラメータ同期
+q_year = st.query_params.get("y")
+q_month = st.query_params.get("m")
+if q_year and q_month:
+    st.session_state.view_year = int(q_year)
+    st.session_state.view_month = int(q_month)
+
+# --- 🎨 共通CSS (究極のモバイル調整版) ---
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Anton&family=Noto+Sans+JP:wght@900&display=swap');
 
-    .main-title {
-        font-family: 'Anton', sans-serif !important;
-        font-size: 80px !important;
-        color: #ff6600 !important;
-        text-shadow: 3px 3px 0px #fff !important;
-        text-align: center !important;
-        margin: 0 !important;
-        padding: 10px 0 !important;
-    }
-    .sub-title {
-        font-family: 'Noto Sans JP', sans-serif !important;
-        font-size: 24px !important;
-        color: #00ff00 !important;
-        text-align: center !important;
-        margin-top: -10px !important;
-        margin-bottom: 20px !important;
-    }
-
-    .cal-table { width: 100% !important; border-collapse: collapse !important; background: #000 !important; table-layout: fixed; }
-    .cal-header { background: #333 !important; color: #fff !important; padding: 5px !important; text-align: center !important; border: 1px solid #444 !important; }
-    .cal-td { border: 1px solid #444 !important; height: 100px !important; vertical-align: top !important; padding: 5px !important; }
-    .cal-link { text-decoration: none !important; color: inherit !important; display: block !important; width: 100% !important; height: 100% !important; }
+    /* アプリ全体の余白を削り取る */
+    .block-container { padding: 1rem 0.5rem !important; }
     
-    .day-num { font-weight: bold !important; font-size: 18px !important; color: #fff !important; }
+    .main-title { font-family: 'Anton', sans-serif !important; font-size: clamp(40px, 10vw, 80px) !important; color: #ff6600 !important; text-shadow: 2px 2px 0px #fff !important; text-align: center !important; margin: 0 !important; }
+    .sub-title { font-family: 'Noto Sans JP', sans-serif !important; font-size: 14px !important; color: #00ff00 !important; text-align: center !important; margin-bottom: 10px !important; }
+
+    /* カレンダー制御：横幅を強制 */
+    .cal-table { width: 100% !important; border-collapse: collapse !important; table-layout: fixed !important; background: #000 !important; }
+    .cal-header { background: #333 !important; color: #fff !important; font-size: 11px !important; padding: 4px 0 !important; border: 1px solid #444 !important; }
+    .cal-td { border: 1px solid #444 !important; height: clamp(60px, 15vh, 100px) !important; vertical-align: top !important; padding: 2px !important; overflow: hidden; }
+    
+    .day-num { font-weight: bold !important; font-size: 14px !important; color: #fff !important; }
     .day-holiday, .day-holiday .day-num { color: #ff4b4b !important; }
     .day-sat, .day-sat .day-num { color: #4b4bff !important; }
-    .event-badge { background: #ff6600 !important; color: #fff !important; font-size: 10px !important; padding: 2px !important; border-radius: 3px !important; margin-top: 5px !important; text-align: center !important; }
-
-    /* ボタンの基本デザイン */
-    div.stButton > button {
-        background-color: #222 !important;
-        color: #00ff00 !important;
-        border: 1px solid #00ff00 !important;
-        border-radius: 20px !important;
-        font-weight: bold !important;
+    
+    /* ライブバッジ：はみ出し防止の要 */
+    .event-badge { 
+        background: #ff6600 !important; color: #fff !important; font-size: 9px !important; 
+        padding: 1px 2px !important; border-radius: 2px !important; margin-top: 2px !important; 
+        white-space: nowrap !important; overflow: hidden !important; text-overflow: ellipsis !important;
+        display: block !important; width: 100% !important;
     }
 
-    /* ★モバイルでの「はみ出し」を力技で防ぐCSS★ */
-    @media (max-width: 768px) {
-        .main-title { font-size: 40px !important; }
-        .sub-title { font-size: 14px !important; }
-        .cal-td { height: 70px !important; }
-
-        /* カラムの横並びを強制 */
-        div[data-testid="stHorizontalBlock"] {
-            display: flex !important;
-            flex-direction: row !important;
-            flex-wrap: nowrap !important;
-            align-items: center !important;
-            justify-content: center !important;
-            gap: 2px !important; /* 隙間を最小に */
-        }
-        
-        div[data-testid="column"] {
-            width: auto !important;
-            flex: 1 1 auto !important;
-            min-width: 0px !important;
-        }
-
-        /* モバイル時のみボタンの余白を極限まで削り、文字を小さく */
-        div.stButton > button {
-            font-size: 12px !important;
-            padding: 2px 4px !important;
-            min-height: 35px !important;
-            width: 100% !important;
-            margin: 0 !important;
-        }
-
-        /* 年月表示のテキストサイズ調整 */
-        .view-date-text {
-            font-size: 14px !important;
-            white-space: nowrap !important;
-        }
+    /* ナビゲーションバー：1行に絶対収める */
+    .nav-container {
+        display: flex; justify-content: space-between; align-items: center;
+        width: 100%; background: #111; border: 1px solid #00ff00; border-radius: 8px;
+        margin-bottom: 8px; height: 45px;
     }
+    .nav-btn {
+        flex: 1; text-align: center; color: #00ff00 !important; text-decoration: none !important;
+        font-weight: bold; font-size: 12px; line-height: 45px;
+    }
+    .nav-center {
+        flex: 1.5; text-align: center; color: #fff; font-family: 'Anton', sans-serif; font-size: 16px;
+    }
+
+    /* 不要な隙間を消す */
+    hr { margin: 10px 0 !important; }
     </style>
     """, unsafe_allow_html=True)
 
 # ───────────────────────────────
-# 6. サイドバー (省略なし)
+# 6. サイドバー
 # ───────────────────────────────
 with st.sidebar:
     st.info(conn_info)
-    st.title("🎸 MENU")
     if st.button("🏠 TOPへ戻る"): st.session_state.page = "top"; st.query_params.clear(); st.rerun()
-    if st.button("📅 ライブ予定一覧"): st.session_state.page = "list"; st.rerun()
-    st.divider()
-
-    if st.session_state.user_auth:
-        st.success(f"Member: {st.session_state.user_auth['name']}")
-        if st.button("マイページ"): st.session_state.page = "mypage"; st.rerun()
-        if st.button("ログアウト"): st.session_state.user_auth = None; st.rerun()
-    else:
-        with st.expander("👤 メンバーログイン/登録"):
-            t_log, t_reg = st.tabs(["ログイン", "新規登録"])
-            with t_log:
-                le = st.text_input("Email", key="u_le"); lp = st.text_input("Pass", type="password", key="u_lp")
-                if st.button("Login"):
-                    u = run_query("SELECT id, name, email FROM users WHERE email=? AND password=?", (le, lp))
-                    if u:
-                        d = u[0] if isinstance(u[0], dict) else {"id":u[0][0], "name":u[0][1], "email":u[0][2]}
-                        st.session_state.user_auth = d; st.rerun()
-            with t_reg:
-                rn = st.text_input("名前"); re = st.text_input("メール"); rp = st.text_input("パスワード", type="password")
-                if st.button("登録"):
-                    run_query("INSERT INTO users (email, password, name) VALUES (?,?,?)", (re, rp, rn), commit=True)
-                    st.success("登録完了だぜ！"); st.rerun()
-
-    st.divider()
+    if st.button("📅 予定一覧"): st.session_state.page = "list"; st.rerun()
+    
     if st.session_state.is_logged_in:
         st.warning("🛠 OWNER MODE")
-        if st.button("オーナー名簿・管理"): st.session_state.page = "admin_users"; st.rerun()
-        with st.expander("🖼 サイトデザイン編集"):
-            st.subheader("トップ画像の変更")
-            new_top = st.file_uploader("新しいトップ画像を選択", type=['jpg', 'png'], key="top_up")
-            if st.button("トップ画像を更新"):
-                if new_top:
-                    b64_top = base64.b64encode(new_top.read()).decode()
-                    save_info("top_image_b64", b64_top)
-                    st.success("トップ画像を更新したぜ！"); st.rerun()
-            st.divider()
-            st.subheader("背景画像の変更")
-            new_bg = st.file_uploader("新しい背景画像を選択", type=['jpg', 'png'], key="bg_up")
-            if st.button("背景画像を更新"):
-                if new_bg:
-                    b64_bg = base64.b64encode(new_bg.read()).decode()
-                    save_info("bg_image", b64_bg)
-                    st.success("背景を更新したぜ！"); st.rerun()
-
-        with st.expander("📅 ライブ情報の新規登録"):
-            with st.form("add_live"):
-                d = st.date_input("日付"); t = st.text_input("ライブタイトル"); loc = st.text_input("会場")
-                op = st.text_input(" Open", value="18:30"); stt = st.text_input("Start", value="19:00")
-                pr = st.text_input("チケット料金", value="¥2,500 + 1D")
-                ds = st.text_area("ライブ詳細・出演者など")
-                img = st.file_uploader("フライヤー画像", type=['jpg', 'png'])
-                if st.form_submit_button("この内容でライブを公開する"):
-                    p = f"img_{d.strftime('%Y%m%d')}.jpg" if img else ""
-                    if img:
-                        with open(p, "wb") as f: f.write(img.getbuffer())
-                    run_query("INSERT INTO events (date, title, description, open_time, start_time, price, location, image_path) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", (d.strftime("%Y-%m-%d"), t, ds, op, stt, pr, loc, p), commit=True)
-                    st.success(f"{t} の登録が完了だぜ！"); st.rerun()
-
-        with st.expander("📝 編集・削除"):
-            all_events = run_query("SELECT * FROM events ORDER BY date DESC")
-            if all_events:
-                event_labels = [f"{e[1] if isinstance(e, list) else e['date']} | {e[2] if isinstance(e, list) else e['title']}" for e in all_events]
-                st.selectbox("編集するライブを選択", event_labels)
-
         if st.button("オーナーログアウト"): st.session_state.is_logged_in = False; st.rerun()
     else:
         with st.expander("🛠 管理者"):
-            opw = st.text_input("Admin Pass", type="password")
-            if st.button("Admin Login"):
+            opw = st.text_input("Pass", type="password")
+            if st.button("Login"):
                 if opw == "owner123": st.session_state.is_logged_in = True; st.rerun()
 
 # ───────────────────────────────
@@ -272,30 +183,24 @@ if st.session_state.page == "top":
     top_img_b64 = get_info("top_image_b64", "")
     if top_img_b64:
         st.image(f"data:image/jpeg;base64,{top_img_b64}", use_container_width=True)
-    elif os.path.exists("top_hero.jpg"):
-        st.image("top_hero.jpg", use_container_width=True)
     
-    st.divider()
+    # ナビゲーション
+    p_year, p_month = (st.session_state.view_year, st.session_state.view_month - 1) if st.session_state.view_month > 1 else (st.session_state.view_year - 1, 12)
+    n_year, n_month = (st.session_state.view_year, st.session_state.view_month + 1) if st.session_state.view_month < 12 else (st.session_state.view_year + 1, 1)
+    
+    nav_html = f"""
+    <div class="nav-container">
+        <a href="./?y={p_year}&m={p_month}" target="_self" class="nav-btn">◀ PREV</a>
+        <div class="nav-center">{st.session_state.view_year} / {st.session_state.view_month:02d}</div>
+        <a href="./?y={n_year}&m={n_month}" target="_self" class="nav-btn">NEXT ▶</a>
+    </div>
+    """
+    st.markdown(nav_html, unsafe_allow_html=True)
 
-    # --- ★年月移動ボタン (はみ出し対策版) ---
-    col_p, col_c, col_n = st.columns([1, 2, 1])
-    with col_p:
-        # ボタンの文字を極限まで短くして、はみ出しを防ぐ
-        if st.button("◀ 前", use_container_width=True):
-            st.session_state.view_month -= 1
-            if st.session_state.view_month == 0: st.session_state.view_month = 12; st.session_state.view_year -= 1
-            st.rerun()
-    with col_c:
-        st.markdown(f"<div style='text-align:center;'><span class='view-date-text' style='color:#00ff00; font-size:18px; font-weight:bold;'>{st.session_state.view_year} / {st.session_state.view_month:02d}</span></div>", unsafe_allow_html=True)
-    with col_n:
-        if st.button("次 ▶", use_container_width=True):
-            st.session_state.view_month += 1
-            if st.session_state.view_month == 13: st.session_state.view_month = 1; st.session_state.view_year += 1
-            st.rerun()
-
+    # カレンダー
     cal = pycal.Calendar(0)
     month_days = cal.monthdayscalendar(st.session_state.view_year, st.session_state.view_month)
-    rows = run_query("SELECT date, title, image_path FROM events")
+    rows = run_query("SELECT date, title FROM events")
     live_data = { (r[0] if isinstance(r, list) else r['date']): r for r in rows }
 
     html = '<table class="cal-table"><tr>'
@@ -307,14 +212,13 @@ if st.session_state.page == "top":
         html += '<tr>'
         for idx, day in enumerate(week):
             if day == 0: 
-                html += '<td style="border:none;"></td>'
+                html += '<td style="border:none; background:transparent;"></td>'
             else:
                 d_str = f"{st.session_state.view_year}-{st.session_state.view_month:02d}-{day:02d}"
                 hol = get_holiday(st.session_state.view_year, st.session_state.view_month, day)
                 cls = "day-holiday" if (hol or idx == 6) else "day-sat" if idx == 5 else ""
-                html += f'<td class="cal-td {cls}"><a href="./?date={d_str}" target="_self" class="cal-link">'
+                html += f'<td class="cal-td {cls}"><a href="./?date={d_str}" target="_self" style="text-decoration:none; color:inherit;">'
                 html += f'<span class="day-num">{day}</span>'
-                if hol: html += f'<div style="font-size:8px;">{hol}</div>'
                 if d_str in live_data:
                     title = live_data[d_str][1] if isinstance(live_data[d_str], list) else live_data[d_str]['title']
                     html += f'<div class="event-badge">{title}</div>'
@@ -327,44 +231,24 @@ if st.session_state.page == "top":
         st.session_state.page = "detail"; st.rerun()
 
 elif st.session_state.page == "detail":
-    if st.button("← TOPへ戻る"): st.session_state.page = "top"; st.query_params.clear(); st.rerun()
+    if st.button("← TOP"): st.session_state.page = "top"; st.query_params.clear(); st.rerun()
     ev = run_query("SELECT * FROM events WHERE date=?", (st.session_state.selected_date,))
     if ev:
         e = ev[0]
         if isinstance(e, list): e = {"id":e[0], "title":e[2], "description":e[3], "open_time":e[4], "start_time":e[5], "price":e[6], "location":e[7], "image_path":e[8]}
-        st.markdown(f'<h1 class="main-title" style="font-size:50px !important;">{e["title"]}</h1>', unsafe_allow_html=True)
-        col1, col2 = st.columns([1, 1])
-        with col1:
-            if e["image_path"] and os.path.exists(e["image_path"]): st.image(e["image_path"], use_container_width=True)
-        with col2:
-            st.markdown(f"### 📅 {st.session_state.selected_date}")
-            st.markdown(f"### 📍 {e['location']}")
-            map_url = f"https://www.google.com/maps/search/?api=1&query={urllib.parse.quote(e['location'])}"
-            st.link_button("🗺️ Google Mapで会場を見る", map_url)
-            st.divider()
-            st.markdown("#### ⚡️ LIVE INFO ⚡️")
-            st.write(e["description"])
+        st.markdown(f'### {e["title"]}')
+        if e["image_path"] and os.path.exists(e["image_path"]): st.image(e["image_path"], use_container_width=True)
+        st.write(f"📅 {st.session_state.selected_date} / 📍 {e['location']}")
         with st.form("res_form"):
-            st.subheader("🎟 予約フォーム")
-            u_n = st.session_state.user_auth['name'] if st.session_state.user_auth else ""
-            u_e = st.session_state.user_auth['email'] if st.session_state.user_auth else ""
-            n = st.text_input("お名前", value=u_n); p = st.number_input("人数", 1, 10, 1); m = st.text_input("メール", value=u_e)
+            n = st.text_input("お名前"); p = st.number_input("人数", 1, 10, 1)
             if st.form_submit_button("予約確定"):
-                uid = st.session_state.user_auth['id'] if st.session_state.user_auth else None
-                run_query("INSERT INTO reservations (event_id, user_id, name, people, email) VALUES (?,?,?,?,?)", (e['id'], uid, n, p, m), commit=True)
+                run_query("INSERT INTO reservations (event_id, name, people) VALUES (?,?,?)", (e['id'], n, p), commit=True)
                 st.success("予約完了だぜ！")
 
 elif st.session_state.page == "list":
-    st.markdown('<h1 class="main-title">SCHEDULE</h1>', unsafe_allow_html=True)
-    res = run_query("SELECT date, title, location FROM events ORDER BY date ASC")
+    st.markdown('### SCHEDULE')
+    res = run_query("SELECT date, title FROM events ORDER BY date ASC")
     for r in res:
-        d, t, l = (r[0], r[1], r[2]) if isinstance(r, list) else (r['date'], r['title'], r['location'])
-        if st.button(f"{d} | {t} | 📍 {l}", use_container_width=True):
+        d, t = (r[0], r[1]) if isinstance(r, list) else (r['date'], r['title'])
+        if st.button(f"{d} | {t}", use_container_width=True):
             st.session_state.selected_date = d; st.session_state.page = "detail"; st.rerun()
-
-elif st.session_state.page == "admin_users":
-    st.markdown('<h1 class="main-title">ADMIN LIST</h1>', unsafe_allow_html=True)
-    res = run_query("SELECT r.id, e.date, e.title, r.name, r.people FROM reservations r JOIN events e ON r.event_id = e.id ORDER BY e.date DESC")
-    for r in res:
-        v = list(r.values()) if isinstance(r, dict) else r
-        st.write(f"📅 {v[1]} : {v[3]} 様 ({v[4]}名) - {v[2]}")
