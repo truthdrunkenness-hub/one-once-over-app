@@ -102,12 +102,11 @@ if 'selected_date' not in st.session_state: st.session_state.selected_date = Non
 if 'view_month' not in st.session_state: st.session_state.view_month = datetime.now().month
 if 'view_year' not in st.session_state: st.session_state.view_year = datetime.now().year
 
-# --- 🎨 共通CSS (PC・スマホ両対応版) ---
+# --- 🎨 共通CSS (デザイン調整版) ---
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Anton&family=Noto+Sans+JP:wght@900&display=swap');
 
-    /* メインタイトル */
     .main-title {
         font-family: 'Anton', sans-serif !important;
         font-size: 80px !important;
@@ -128,20 +127,31 @@ st.markdown("""
         margin-bottom: 20px !important;
     }
 
-    /* カレンダー基本設定 */
     .cal-table { width: 100% !important; border-collapse: collapse !important; background: #000 !important; color: #fff !important; table-layout: fixed; }
     .cal-header { background: #333 !important; color: #fff !important; padding: 5px !important; text-align: center !important; border: 1px solid #444 !important; }
     .cal-td { border: 1px solid #444 !important; height: 100px !important; vertical-align: top !important; position: relative !important; padding: 5px !important; }
     .cal-link { text-decoration: none !important; color: inherit !important; display: block !important; width: 100% !important; height: 100% !important; }
     
     .day-num { font-weight: bold !important; font-size: 18px !important; color: #fff !important; }
-    .day-holiday, .day-holiday .day-num { color: #ff4b4b !important; } /* 日・祝の赤 */
-    .day-sat, .day-sat .day-num { color: #4b4bff !important; }        /* 土の青 */
+    .day-holiday, .day-holiday .day-num { color: #ff4b4b !important; }
+    .day-sat, .day-sat .day-num { color: #4b4bff !important; }
     
     .event-badge { background: #ff6600 !important; color: #fff !important; font-size: 10px !important; padding: 2px !important; border-radius: 3px !important; margin-top: 5px !important; text-align: center !important; }
-    .cal-img { width: 100% !important; border-radius: 5px !important; }
 
-    /* スマホ専用調整 */
+    /* ★ボタンのダサさ解消用CSS */
+    div.stButton > button {
+        background-color: #222 !important;
+        color: #00ff00 !important;
+        border: 1px solid #00ff00 !important;
+        border-radius: 20px !important;
+        font-weight: bold !important;
+        transition: 0.3s !important;
+    }
+    div.stButton > button:hover {
+        background-color: #00ff00 !important;
+        color: #000 !important;
+    }
+
     @media (max-width: 768px) {
         .main-title { font-size: 40px !important; }
         .sub-title { font-size: 14px !important; }
@@ -149,10 +159,20 @@ st.markdown("""
         .day-num { font-size: 12px !important; }
         .event-badge { font-size: 7px !important; }
         
-        /* ボタン横並びの強制調整 */
-        div[data-testid="stHorizontalBlock"] { gap: 0.5rem !important; }
-        div[data-testid="column"] { width: 33% !important; flex: 1 1 33% !important; min-width: 33% !important; }
-        button { font-size: 10px !important; padding: 0.25rem !important; }
+        /* スマホでボタンがデカすぎないように制限 */
+        div.stButton > button {
+            font-size: 11px !important;
+            padding: 4px 8px !important;
+            min-height: 30px !important;
+            max-width: 90px !important; /* 横幅を絞るぜ */
+            margin: 0 auto !important;
+            display: block !important;
+        }
+        
+        /* カラムの余白調整 */
+        div[data-testid="stHorizontalBlock"] {
+            align-items: center !important;
+        }
     }
     </style>
     """, unsafe_allow_html=True)
@@ -251,11 +271,9 @@ with st.sidebar:
 # 7. メインロジック
 # ───────────────────────────────
 if st.session_state.page == "top":
-    # --- 巨大タイトル表示 (HTML復活！) ---
     st.markdown('<h1 class="main-title">One Once Over</h1>', unsafe_allow_html=True)
     st.markdown('<p class="sub-title">- ライブ予約サイト -</p>', unsafe_allow_html=True)
 
-    # --- トップ画像 ---
     top_img_b64 = get_info("top_image_b64", "")
     if top_img_b64:
         st.image(f"data:image/jpeg;base64,{top_img_b64}", use_container_width=True)
@@ -264,22 +282,23 @@ if st.session_state.page == "top":
     
     st.divider()
 
-    # --- 年月移動ボタン (スマホ横並び対応) ---
-    col_p, col_c, col_n = st.columns([1, 1, 1])
+    # --- ★年月移動ボタンのレイアウト改善 ---
+    # カラム比率を [1, 2, 1] にして、ボタンが横に広がりすぎるのを防ぐ
+    col_p, col_c, col_n = st.columns([1, 2, 1])
     with col_p:
         if st.button("◀ 前月", use_container_width=True):
             st.session_state.view_month -= 1
             if st.session_state.view_month == 0: st.session_state.view_month = 12; st.session_state.view_year -= 1
             st.rerun()
     with col_c:
-        st.markdown(f"<p style='text-align:center; color:#00ff00; font-size:16px; font-weight:bold; margin-top:5px;'>{st.session_state.view_year}/{st.session_state.view_month:02d}</p>", unsafe_allow_html=True)
+        # 年月の表示を少しスタイリッシュに
+        st.markdown(f"<p style='text-align:center; color:#00ff00; font-size:18px; font-weight:bold; margin:0;'>{st.session_state.view_year} / {st.session_state.view_month:02d}</p>", unsafe_allow_html=True)
     with col_n:
         if st.button("次月 ▶", use_container_width=True):
             st.session_state.view_month += 1
             if st.session_state.view_month == 13: st.session_state.view_month = 1; st.session_state.view_year += 1
             st.rerun()
 
-    # --- カレンダー生成 ---
     cal = pycal.Calendar(0)
     month_days = cal.monthdayscalendar(st.session_state.view_year, st.session_state.view_month)
     rows = run_query("SELECT date, title, image_path FROM events")
@@ -298,7 +317,6 @@ if st.session_state.page == "top":
             else:
                 d_str = f"{st.session_state.view_year}-{st.session_state.view_month:02d}-{day:02d}"
                 hol = get_holiday(st.session_state.view_year, st.session_state.view_month, day)
-                # 土曜はidx=5, 日曜はidx=6
                 cls = "day-holiday" if (hol or idx == 6) else "day-sat" if idx == 5 else ""
                 html += f'<td class="cal-td {cls}"><a href="./?date={d_str}" target="_self" class="cal-link">'
                 html += f'<span class="day-num">{day}</span>'
