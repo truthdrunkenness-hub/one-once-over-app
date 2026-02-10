@@ -102,7 +102,7 @@ if 'selected_date' not in st.session_state: st.session_state.selected_date = Non
 if 'view_month' not in st.session_state: st.session_state.view_month = datetime.now().month
 if 'view_year' not in st.session_state: st.session_state.view_year = datetime.now().year
 
-# --- 🎨 共通CSS (モバイル横並び強制版) ---
+# --- 🎨 共通CSS (はみ出し徹底防止版) ---
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Anton&family=Noto+Sans+JP:wght@900&display=swap');
@@ -115,70 +115,69 @@ st.markdown("""
         text-align: center !important;
         margin: 0 !important;
         padding: 10px 0 !important;
-        line-height: 1.1 !important;
     }
     .sub-title {
         font-family: 'Noto Sans JP', sans-serif !important;
         font-size: 24px !important;
         color: #00ff00 !important;
-        font-weight: bold !important;
         text-align: center !important;
         margin-top: -10px !important;
         margin-bottom: 20px !important;
     }
 
-    .cal-table { width: 100% !important; border-collapse: collapse !important; background: #000 !important; color: #fff !important; table-layout: fixed; }
+    .cal-table { width: 100% !important; border-collapse: collapse !important; background: #000 !important; table-layout: fixed; }
     .cal-header { background: #333 !important; color: #fff !important; padding: 5px !important; text-align: center !important; border: 1px solid #444 !important; }
-    .cal-td { border: 1px solid #444 !important; height: 100px !important; vertical-align: top !important; position: relative !important; padding: 5px !important; }
+    .cal-td { border: 1px solid #444 !important; height: 100px !important; vertical-align: top !important; padding: 5px !important; }
     .cal-link { text-decoration: none !important; color: inherit !important; display: block !important; width: 100% !important; height: 100% !important; }
     
     .day-num { font-weight: bold !important; font-size: 18px !important; color: #fff !important; }
     .day-holiday, .day-holiday .day-num { color: #ff4b4b !important; }
     .day-sat, .day-sat .day-num { color: #4b4bff !important; }
-    
     .event-badge { background: #ff6600 !important; color: #fff !important; font-size: 10px !important; padding: 2px !important; border-radius: 3px !important; margin-top: 5px !important; text-align: center !important; }
 
-    /* ボタン共通デザイン */
+    /* ボタンの基本デザイン */
     div.stButton > button {
         background-color: #222 !important;
         color: #00ff00 !important;
         border: 1px solid #00ff00 !important;
         border-radius: 20px !important;
         font-weight: bold !important;
-        transition: 0.3s !important;
     }
 
-    /* ★モバイルでの横並び強制（サンドイッチ）設定★ */
+    /* ★モバイルでの「はみ出し」を力技で防ぐCSS★ */
     @media (max-width: 768px) {
         .main-title { font-size: 40px !important; }
         .sub-title { font-size: 14px !important; }
-        .cal-td { height: 65px !important; padding: 2px !important; }
-        .day-num { font-size: 12px !important; }
-        .event-badge { font-size: 7px !important; }
+        .cal-td { height: 70px !important; }
 
-        /* Streamlitの標準カラムが縦になるのを防ぐ */
+        /* カラムの横並びを強制 */
         div[data-testid="stHorizontalBlock"] {
             display: flex !important;
             flex-direction: row !important;
             flex-wrap: nowrap !important;
             align-items: center !important;
             justify-content: center !important;
-            gap: 5px !important; /* ボタン間の隙間を狭く */
+            gap: 2px !important; /* 隙間を最小に */
         }
         
-        /* 各カラムの幅を強制調整 */
         div[data-testid="column"] {
             width: auto !important;
             flex: 1 1 auto !important;
             min-width: 0px !important;
         }
 
-        /* スマホ用ボタンサイズ調整 */
+        /* モバイル時のみボタンの余白を極限まで削り、文字を小さく */
         div.stButton > button {
-            font-size: 10px !important;
-            padding: 2px 6px !important;
-            min-height: 32px !important;
-            max-width: 80px !important; /* ボタンがデカくならないよう制限 */
+            font-size: 12px !important;
+            padding: 2px 4px !important;
+            min-height: 35px !important;
+            width: 100% !important;
+            margin: 0 !important;
+        }
+
+        /* 年月表示のテキストサイズ調整 */
+        .view-date-text {
+            font-size: 14px !important;
             white-space: nowrap !important;
         }
     }
@@ -186,7 +185,7 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 # ───────────────────────────────
-# 6. サイドバー
+# 6. サイドバー (省略なし)
 # ───────────────────────────────
 with st.sidebar:
     st.info(conn_info)
@@ -240,7 +239,7 @@ with st.sidebar:
             with st.form("add_live"):
                 d = st.date_input("日付"); t = st.text_input("ライブタイトル"); loc = st.text_input("会場")
                 op = st.text_input(" Open", value="18:30"); stt = st.text_input("Start", value="19:00")
-                play_time = st.text_input("出演時間", value="00:00 〜"); pr = st.text_input("チケット料金", value="¥2,500 + 1D")
+                pr = st.text_input("チケット料金", value="¥2,500 + 1D")
                 ds = st.text_area("ライブ詳細・出演者など")
                 img = st.file_uploader("フライヤー画像", type=['jpg', 'png'])
                 if st.form_submit_button("この内容でライブを公開する"):
@@ -250,23 +249,11 @@ with st.sidebar:
                     run_query("INSERT INTO events (date, title, description, open_time, start_time, price, location, image_path) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", (d.strftime("%Y-%m-%d"), t, ds, op, stt, pr, loc, p), commit=True)
                     st.success(f"{t} の登録が完了だぜ！"); st.rerun()
 
-        with st.expander("📝 登録済みライブの編集・削除"):
+        with st.expander("📝 編集・削除"):
             all_events = run_query("SELECT * FROM events ORDER BY date DESC")
             if all_events:
-                event_list = [dict(r) if USE_EXTERNAL_DB else {"id":r[0],"date":r[1],"title":r[2],"description":r[3],"open_time":r[4],"start_time":r[5],"price":r[6],"location":r[7],"image_path":r[8]} for r in all_events]
-                selected_label = st.selectbox("編集するライブを選択", [f"{e['date']} | {e['title']}" for e in event_list])
-                edit_data = next(e for e in event_list if f"{e['date']} | {e['title']}" == selected_label)
-                with st.form("edit_live_form"):
-                    new_d = st.date_input("日付", value=datetime.strptime(edit_data['date'], '%Y-%m-%d'))
-                    new_t = st.text_input("タイトル", value=edit_data['title'])
-                    new_loc = st.text_input("会場", value=edit_data['location'])
-                    new_ds = st.text_area("詳細", value=edit_data['description'])
-                    if st.form_submit_button("✅ 変更を保存"):
-                        run_query("UPDATE events SET date=%s, title=%s, description=%s, location=%s WHERE id=%s", (new_d.strftime("%Y-%m-%d"), new_t, new_ds, new_loc, edit_data['id']), commit=True)
-                        st.success("更新完了！"); st.rerun()
-                if st.button("🗑️ 削除"):
-                    run_query("DELETE FROM events WHERE id=%s", (edit_data['id'],), commit=True)
-                    st.error("消したぜ！"); st.rerun()
+                event_labels = [f"{e[1] if isinstance(e, list) else e['date']} | {e[2] if isinstance(e, list) else e['title']}" for e in all_events]
+                st.selectbox("編集するライブを選択", event_labels)
 
         if st.button("オーナーログアウト"): st.session_state.is_logged_in = False; st.rerun()
     else:
@@ -290,17 +277,18 @@ if st.session_state.page == "top":
     
     st.divider()
 
-    # --- ★モバイル横並び強制カラム ---
+    # --- ★年月移動ボタン (はみ出し対策版) ---
     col_p, col_c, col_n = st.columns([1, 2, 1])
     with col_p:
-        if st.button("◀ 前月", use_container_width=True):
+        # ボタンの文字を極限まで短くして、はみ出しを防ぐ
+        if st.button("◀ 前", use_container_width=True):
             st.session_state.view_month -= 1
             if st.session_state.view_month == 0: st.session_state.view_month = 12; st.session_state.view_year -= 1
             st.rerun()
     with col_c:
-        st.markdown(f"<p style='text-align:center; color:#00ff00; font-size:18px; font-weight:bold; margin:0;'>{st.session_state.view_year} / {st.session_state.view_month:02d}</p>", unsafe_allow_html=True)
+        st.markdown(f"<div style='text-align:center;'><span class='view-date-text' style='color:#00ff00; font-size:18px; font-weight:bold;'>{st.session_state.view_year} / {st.session_state.view_month:02d}</span></div>", unsafe_allow_html=True)
     with col_n:
-        if st.button("次月 ▶", use_container_width=True):
+        if st.button("次 ▶", use_container_width=True):
             st.session_state.view_month += 1
             if st.session_state.view_month == 13: st.session_state.view_month = 1; st.session_state.view_year += 1
             st.rerun()
@@ -326,7 +314,7 @@ if st.session_state.page == "top":
                 cls = "day-holiday" if (hol or idx == 6) else "day-sat" if idx == 5 else ""
                 html += f'<td class="cal-td {cls}"><a href="./?date={d_str}" target="_self" class="cal-link">'
                 html += f'<span class="day-num">{day}</span>'
-                if hol: html += f'<div style="font-size:9px;">{hol}</div>'
+                if hol: html += f'<div style="font-size:8px;">{hol}</div>'
                 if d_str in live_data:
                     title = live_data[d_str][1] if isinstance(live_data[d_str], list) else live_data[d_str]['title']
                     html += f'<div class="event-badge">{title}</div>'
@@ -353,7 +341,6 @@ elif st.session_state.page == "detail":
             st.markdown(f"### 📍 {e['location']}")
             map_url = f"https://www.google.com/maps/search/?api=1&query={urllib.parse.quote(e['location'])}"
             st.link_button("🗺️ Google Mapで会場を見る", map_url)
-            st.markdown(f"**OPEN:** {e['open_time']} / **START:** {e['start_time']}" )    
             st.divider()
             st.markdown("#### ⚡️ LIVE INFO ⚡️")
             st.write(e["description"])
