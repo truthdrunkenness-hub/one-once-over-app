@@ -118,21 +118,46 @@ if 'view_year' not in st.session_state: st.session_state.view_year = datetime.no
 # CSS適用
 bg_img_base64 = get_info("bg_image", "")
 bg_style = f'background: linear-gradient(rgba(0,0,0,0.8), rgba(0,0,0,0.8)), url("data:image/png;base64,{bg_img_base64}");' if bg_img_base64 else 'background: #111;'
-st.markdown(f"""
+st.markdown("""
     <style>
-    @import url('https://fonts.googleapis.com/css2?family=Anton&family=Noto+Sans+JP:wght@900&display=swap');
-    .stApp {{ {bg_style} background-attachment: fixed; background-size: cover; color: #fff; }}    .huge-title {{ font-family: 'Anton', sans-serif !important; font-size: 100px !important; color: #fff !important; text-shadow: 6px 6px 0px #FF5F1F !important; text-align: center; display: block; }}
-    .huge-sub {{ font-family: 'Noto Sans JP', sans-serif; font-size: 26px !important; color: #39FF14 !important; text-align: center; font-weight: 900; display: block; margin-bottom: 30px; }}
-    .cal-table {{ width: 100%; border-collapse: separate; border-spacing: 5px; table-layout: fixed; }}
-    .cal-header {{ background: rgba(255, 255, 255, 0.15); font-size: 18px; padding: 10px; text-align: center; }}
-    .cal-td {{ height: 180px; background: rgba(0,0,0,0.85); border: 1px solid rgba(255,255,255,0.2); vertical-align: top; padding: 10px; position: relative; }}
-    .cal-link {{ text-decoration: none !important; display: block; width: 100%; height: 100%; color: #ffffff !important; }}
-    .day-num {{ font-size: 22px; font-weight: 900; }}
-    .day-sat .day-num {{ color: #39FF14 !important; }}
-    .day-sun .day-num, .day-holiday .day-num {{ color: #FF5F1F !important; }}
-    .event-badge {{ background: #FF5F1F; color: white; padding: 4px; font-size: 10px; font-weight: bold; margin-top: 5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }}
-    .cal-img {{ width: 100%; height: 80px; object-fit: cover; margin-top: 5px; border: 1px solid #333; }}
-    div.stButton > button {{ border: 2px solid #FF5F1F; background: rgba(255,95,31,0.1); color: #fff; font-weight: bold; }}
+    /* --- 基本のタイトル設定 --- */
+    .main-title {
+        font-family: 'Anton', sans-serif;
+        font-size: 80px;
+        color: #ff6600;
+        text-shadow: 3px 3px 0px #fff;
+        text-align: center;
+        margin-bottom: 0;
+        line-height: 1.1;
+    }
+    .sub-title {
+        font-family: 'Noto Sans JP', sans-serif;
+        font-size: 24px;
+        color: #00ff00;
+        font-weight: bold;
+        text-align: center;
+        margin-top: -10px;
+    }
+
+    /* --- スマホ（画面幅 768px 以下）用の調整 --- */
+    @media (max-width: 768px) {
+        .main-title {
+            font-size: 45px; /* スマホではサイズを半分近くまで落とすぜ */
+            text-shadow: 2px 2px 0px #fff;
+        }
+        .sub-title {
+            font-size: 16px; /* サブタイトルも控えめに */
+            margin-top: 0px;
+        }
+        /* カレンダーの文字がはみ出さないように調整 */
+        .cal-table {
+            font-size: 10px;
+        }
+        .event-badge {
+            font-size: 8px;
+            padding: 1px;
+        }
+    }
     </style>
     """, unsafe_allow_html=True)
 
