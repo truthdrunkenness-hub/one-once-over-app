@@ -313,15 +313,10 @@ with st.sidebar:
 # 7. メインロジック
 # ───────────────────────────────
 if st.session_state.page == "top":
-    # --- 【ここが追加：巨大タイトルロゴ】 ---
     st.markdown("""
-        <div style="text-align: center; padding: 20px 0;">
-            <h1 style="font-family: 'Anton', sans-serif; font-size: 80px; color: #ff6600; text-shadow: 3px 3px 0px #fff; margin-bottom: 0;">
-                One Once Over
-            </h1>
-            <p style="font-family: 'Noto Sans JP', sans-serif; font-size: 24px; color: #00ff00; font-weight: bold; margin-top: -10px;">
-                - ライブ予約サイト -
-            </p>
+        <div style="text-align: center; padding: 10px 0;">
+            <h1 class="main-title">One Once Over</h1>
+            <p class="sub-title">- ライブ予約サイト -</p>
         </div>
     """, unsafe_allow_html=True)
 
